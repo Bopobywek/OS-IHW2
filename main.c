@@ -14,17 +14,20 @@
 char *sempahore_template_name = "garden-semaphore-id-";
 const char *shar_object = "posix-shar-object";
 int main_shmid;
-int field_columns;
-int field_rows;
 
-void runFirstGardener(int columns, int rows)
+const int COLUMNS = 20;
+const int ROWS = 20;
+const int MAX_OF_SEMAPHORES = COLUMNS * ROWS / 4;
+const int EMPTY_PLOT_COEFFICIENT = 2;
+
+void runFirstGardener(int columns, int rows, int workingTimeMilliseconds)
 {
     int big_columns = columns / 2;
     int field_size = columns * rows;
     int *field;
     int shmid;
 
-    sem_t *semaphores[100];
+    sem_t *semaphores[MAX_OF_SEMAPHORES];
     for (int k = 0; k < columns * rows / 4; ++k)
     {
         char sem_name[200];
@@ -63,11 +66,11 @@ void runFirstGardener(int columns, int rows)
             if (field[i * columns + j] == 0)
             {
                 field[i * columns + j] = 1;
-                usleep(100 * 1000);
+                usleep(workingTimeMilliseconds * 1000);
             }
             else
             {
-                usleep(100 * 1000);
+                usleep(workingTimeMilliseconds / EMPTY_PLOT_COEFFICIENT * 1000);
             }
             sem_post(semaphores[i / 2 * big_columns + j / 2]);
             ++j;
@@ -83,11 +86,11 @@ void runFirstGardener(int columns, int rows)
             if (field[i * columns + j] == 0)
             {
                 field[i * columns + j] = 1;
-                usleep(50 * 1000);
+                usleep(workingTimeMilliseconds * 1000);
             }
             else
             {
-                usleep(100 * 1000);
+                usleep(workingTimeMilliseconds / EMPTY_PLOT_COEFFICIENT * 1000);
             }
             sem_post(semaphores[i / 2 * big_columns + j / 2]);
             --j;
@@ -100,14 +103,14 @@ void runFirstGardener(int columns, int rows)
     exit(0);
 }
 
-void runSecondGardener(int columns, int rows)
+void runSecondGardener(int columns, int rows, int workingTimeMilliseconds)
 {
     int big_columns = columns / 2;
     int field_size = columns * rows;
     int *field;
     int shmid;
 
-    sem_t *semaphores[100];
+    sem_t *semaphores[MAX_OF_SEMAPHORES];
     for (int k = 0; k < columns * rows / 4; ++k)
     {
         char sem_name[200];
@@ -146,11 +149,11 @@ void runSecondGardener(int columns, int rows)
             if (field[i * columns + j] == 0)
             {
                 field[i * columns + j] = 2;
-                usleep(100 * 1000);
+                usleep(workingTimeMilliseconds * 1000);
             }
             else
             {
-                usleep(100 * 1000);
+                usleep(workingTimeMilliseconds / EMPTY_PLOT_COEFFICIENT * 1000);
             }
             sem_post(semaphores[i / 2 * big_columns + j / 2]);
             --i;
@@ -166,11 +169,11 @@ void runSecondGardener(int columns, int rows)
             if (field[i * columns + j] == 0)
             {
                 field[i * columns + j] = 2;
-                usleep(0 * 1000);
+                usleep(workingTimeMilliseconds * 1000);
             }
             else
             {
-                usleep(0 * 1000);
+                usleep(workingTimeMilliseconds / EMPTY_PLOT_COEFFICIENT * 1000);
             }
             sem_post(semaphores[i / 2 * big_columns + j / 2]);
             ++i;
@@ -199,6 +202,76 @@ void unlink_all_semaphores_with_close(int columns, int rows)
     }
 }
 
+void printField(int *field)
+{
+    for (int i = 0; i < ROWS; ++i)
+    {
+        for (int j = 0; j < COLUMNS; ++j)
+        {
+            if (field[i * COLUMNS + j] < 0)
+            {
+                printf("X ");
+            }
+            else
+            {
+                printf("%d ", field[i * COLUMNS + j]);
+            }
+        }
+        printf("\n");
+    }
+}
+
+void initializeField(int *field)
+{
+    for (int i = 0; i < ROWS; ++i)
+    {
+        for (int j = 0; j < COLUMNS; ++j)
+        {
+            field[i * COLUMNS + j] = 0;
+        }
+    }
+
+    int percentage = 10 + random() % 20;
+    int count_of_bad_plots = COLUMNS * ROWS * percentage / 100;
+    for (int i = 0; i < count_of_bad_plots; ++i)
+    {
+        int row_index;
+        int column_index;
+        do
+        {
+            row_index = random() % ROWS;
+            column_index = random() % COLUMNS;
+        } while (field[row_index * COLUMNS + column_index] == -1);
+
+        field[row_index * COLUMNS + column_index] = -1;
+    }
+}
+
+void createSemaphores()
+{
+    for (int k = 0; k < COLUMNS * ROWS / 4; ++k)
+    {
+        char sem_name[200];
+        sprintf(sem_name, "%s%d", sempahore_template_name, k);
+
+        sem_t *sem;
+        if ((sem = sem_open(sem_name, O_CREAT, 0666, 1)) == 0)
+        {
+            perror("sem_open: Can not create admin semaphore");
+            exit(-1);
+        };
+
+        int val;
+        sem_getvalue(sem, &val);
+        if (val != 1)
+        {
+            printf("Ooops, one of semaphores can't set initial value to 1. Please, restart program\n");
+            unlink_all_semaphores_with_close(COLUMNS, ROWS);
+            exit(-1);
+        }
+    }
+}
+
 pid_t chpid1, chpid2;
 
 void keyboard_interruption_handler(int num)
@@ -207,22 +280,24 @@ void keyboard_interruption_handler(int num)
     kill(chpid2, SIGINT);
     printf("Closing resources...\n");
     shm_unlink(shar_object);
-    unlink_all_semaphores_with_close(field_columns, field_rows);
+    unlink_all_semaphores_with_close(COLUMNS, ROWS);
     exit(0);
 }
 
 int main(int argc, char *argv[])
 {
     srand(time(NULL));
-    const int COLUMNS = 10;
-    const int ROWS = 10;
-    field_columns = 10;
-    field_rows = 10;
 
-    const int BIG_COLUMNS = 5;
-    const int BIG_ROWS = 5;
-    const int field_size = ROWS * COLUMNS;
-    const int pID = 0;
+    if (argc != 3)
+    {
+        printf("Invalid count of arguments. "
+               "Expected 2 arguments: first_gardener_speed, second_gardener_speed\n");
+        exit(-1);
+    }
+
+    int field_size = ROWS * COLUMNS;
+    int first_gardener_working_time = atoi(argv[1]);
+    int second_gardener_working_time = atoi(argv[2]);
 
     // Будем перемещаться как в шарпах: array[i, j] = array[i * COLUMNS + j]
     // field[i] = 1, если участок обработал первый садовник
@@ -251,66 +326,16 @@ int main(int argc, char *argv[])
         printf("Open shared Memory\n");
     }
 
-    for (int i = 0; i < ROWS; ++i)
-    {
-        for (int j = 0; j < COLUMNS; ++j)
-        {
-            field[i * COLUMNS + j] = 0;
-        }
-    }
+    initializeField(field);
+    printField(field);
 
-    int percentage = 10 + random() % 20;
-    int count_of_bad_plots = COLUMNS * ROWS * percentage / 100;
-    for (int i = 0; i < count_of_bad_plots; ++i)
-    {
-        int row_index;
-        int column_index;
-        do
-        {
-            row_index = random() % ROWS;
-            column_index = random() % COLUMNS;
-        } while (field[row_index * COLUMNS + column_index] == -1);
-
-        field[row_index * COLUMNS + column_index] = -1;
-    }
-
-    for (int i = 0; i < ROWS; ++i)
-    {
-        for (int j = 0; j < COLUMNS; ++j)
-        {
-            if (field[i * COLUMNS + j] < 0)
-            {
-                printf("x ");
-            }
-            else
-            {
-                printf("%d ", field[i * COLUMNS + j]);
-            }
-        }
-        printf("\n");
-    }
-
-    for (int k = 0; k < COLUMNS * ROWS / 4; ++k)
-    {
-        char sem_name[200];
-        sprintf(sem_name, "%s%d", sempahore_template_name, k);
-
-        sem_t *sem;
-        if ((sem = sem_open(sem_name, O_CREAT, 0666, 1)) == 0)
-        {
-            perror("sem_open: Can not create admin semaphore");
-            exit(-1);
-        };
-
-        int val;
-        sem_getvalue(sem, &val);
-        printf("Val_%d: %d\n", k, val);
-    }
+    // Создаем семафоры для каждого из блоков плана
+    createSemaphores();
 
     chpid1 = fork();
     if (chpid1 == 0)
     {
-        runFirstGardener(COLUMNS, ROWS);
+        runFirstGardener(COLUMNS, ROWS, first_gardener_working_time);
     }
     else if (chpid1 < 0)
     {
@@ -321,7 +346,7 @@ int main(int argc, char *argv[])
     chpid2 = fork();
     if (chpid2 == 0)
     {
-        runSecondGardener(COLUMNS, ROWS);
+        runSecondGardener(COLUMNS, ROWS, second_gardener_working_time);
     }
     else if (chpid2 < 0)
     {
@@ -335,23 +360,9 @@ int main(int argc, char *argv[])
     waitpid(chpid1, &status, 0);
     waitpid(chpid2, &status, 0);
 
-    unlink_all_semaphores_with_close(field_columns, field_rows);
+    unlink_all_semaphores_with_close(COLUMNS, ROWS);
 
-    for (int i = 0; i < ROWS; ++i)
-    {
-        for (int j = 0; j < COLUMNS; ++j)
-        {
-            if (field[i * COLUMNS + j] < 0)
-            {
-                printf("x ");
-            }
-            else
-            {
-                printf("%d ", field[i * COLUMNS + j]);
-            }
-        }
-        printf("\n");
-    }
+    printField(field);
 
     shm_unlink(shar_object);
 }

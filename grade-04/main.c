@@ -17,7 +17,7 @@ int main_shmid;
 
 int columns;
 int rows;
-const int MAX_OF_SEMAPHORES = 225;
+const int MAX_OF_SEMAPHORES = 1024;
 const int EMPTY_PLOT_COEFFICIENT = 2;
 
 void runFirstGardener(int columns, int rows, int workingTimeMilliseconds)
@@ -47,7 +47,7 @@ void runFirstGardener(int columns, int rows, int workingTimeMilliseconds)
     }
     else
     {
-        if ((field = mmap(0, field_size, PROT_WRITE | PROT_READ, MAP_SHARED, shmid, 0)) < 0)
+        if ((field = mmap(0, field_size * sizeof(int), PROT_WRITE | PROT_READ, MAP_SHARED, shmid, 0)) < 0)
         {
             printf("Can\'t connect to shared memory\n");
             exit(-1);
@@ -133,7 +133,7 @@ void runSecondGardener(int columns, int rows, int workingTimeMilliseconds)
     }
     else
     {
-        if ((field = mmap(0, field_size, PROT_WRITE | PROT_READ, MAP_SHARED, shmid, 0)) < 0)
+        if ((field = mmap(0, field_size * sizeof(int), PROT_WRITE | PROT_READ, MAP_SHARED, shmid, 0)) < 0)
         {
             printf("Can\'t connect to shared memory\n");
             exit(-1);
@@ -338,12 +338,12 @@ int main(int argc, char *argv[])
     }
     else
     {
-        if (ftruncate(main_shmid, field_size) < 0)
+        if (ftruncate(main_shmid, field_size * sizeof(int)) < 0)
         {
             perror("Can't rezie shm");
             exit(-1);
         }
-        if ((field = mmap(0, field_size, PROT_WRITE | PROT_READ, MAP_SHARED, main_shmid, 0)) < 0)
+        if ((field = mmap(0, field_size * sizeof(int), PROT_WRITE | PROT_READ, MAP_SHARED, main_shmid, 0)) < 0)
         {
             printf("Can\'t connect to shared memory\n");
             exit(-1);

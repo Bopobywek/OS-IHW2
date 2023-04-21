@@ -12,7 +12,7 @@
 #include <time.h>
 
 char *sempahore_template_name = "/garden-semaphore-id-";
-const char *shar_object = "posix-shar-object";
+const char *shared_object = "/posix-shared-object";
 int main_shmid;
 
 int columns;
@@ -40,7 +40,7 @@ void runFirstGardener(int columns, int rows, int workingTimeMilliseconds)
         };
     }
 
-    if ((shmid = shm_open(shar_object, O_RDWR | O_NONBLOCK, 0666)) < 0)
+    if ((shmid = shm_open(shared_object, O_RDWR | O_NONBLOCK, 0666)) < 0)
     {
         perror("Can't connect to shared memory");
         exit(-1);
@@ -126,7 +126,7 @@ void runSecondGardener(int columns, int rows, int workingTimeMilliseconds)
         };
     }
 
-    if ((shmid = shm_open(shar_object, O_RDWR | O_NONBLOCK, 0666)) < 0)
+    if ((shmid = shm_open(shared_object, O_RDWR | O_NONBLOCK, 0666)) < 0)
     {
         perror("Can't connect to shared memory");
         exit(-1);
@@ -285,7 +285,7 @@ void keyboard_interruption_handler(int num)
     kill(chpid1, SIGINT);
     kill(chpid2, SIGINT);
     printf("Closing resources...\n");
-    shm_unlink(shar_object);
+    shm_unlink(shared_object);
     unlink_all_semaphores_with_close(columns, rows);
     exit(0);
 }
@@ -331,7 +331,7 @@ int main(int argc, char *argv[])
     // field[i] = -1, если участок не доступен для обработки
     int *field;
 
-    if ((main_shmid = shm_open(shar_object, O_CREAT | O_RDWR, 0666)) < 0)
+    if ((main_shmid = shm_open(shared_object, O_CREAT | O_RDWR, 0666)) < 0)
     {
         perror("Can't connect to shared memory");
         exit(-1);
@@ -391,5 +391,5 @@ int main(int argc, char *argv[])
     printField(field);
     fflush(stdout);
 
-    shm_unlink(shar_object);
+    shm_unlink(shared_object);
 }

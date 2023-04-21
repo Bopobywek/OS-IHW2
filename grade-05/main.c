@@ -90,12 +90,12 @@ void runFirstGardener(int columns, int rows, int workingTimeMilliseconds)
 
     sem_t *semaphores;
     getSemaphores(&semaphores, columns, rows, &sem_shmid);
-    printf("First gardener open shared memory with semaphores\n");
+    printf("Gardener 1 open shared memory with semaphores\n");
     fflush(stdout);
 
     int *field;
     getField(&field, field_size, &shmid);
-    printf("First gardener open shared memory with field\n");
+    printf("Gardener 1 open shared memory with field\n");
     fflush(stdout);
 
     int i = 0;
@@ -127,7 +127,7 @@ void runFirstGardener(int columns, int rows, int workingTimeMilliseconds)
         ++i;
         ++j;
     }
-    printf("First gardener finish work\n");
+    printf("Gardener 1 finish work\n");
     exit(0);
 }
 
@@ -140,12 +140,12 @@ void runSecondGardener(int columns, int rows, int workingTimeMilliseconds)
 
     sem_t *semaphores;
     getSemaphores(&semaphores, columns, rows, &sem_shmid);
-    printf("Second gardener open shared memory with semaphores\n");
+    printf("Gardener 2 open shared memory with semaphores\n");
     fflush(stdout);
 
     int *field;
     getField(&field, field_size, &shmid);
-    printf("Second gardener open shared memory with field\n");
+    printf("Gardener 2 open shared memory with field\n");
     fflush(stdout);
 
     int i = rows - 1;
@@ -177,7 +177,7 @@ void runSecondGardener(int columns, int rows, int workingTimeMilliseconds)
         --i;
         --j;
     }
-    printf("Second gardener finish work\n");
+    printf("Gardener 2 finish work\n");
     exit(0);
 }
 

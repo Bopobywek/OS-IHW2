@@ -20,14 +20,33 @@ int rows;
 const int MAX_OF_SEMAPHORES = 1024;
 const int EMPTY_PLOT_COEFFICIENT = 2;
 
-void runFirstGardener(int columns, int rows, int workingTimeMilliseconds)
+struct GardenerTask
 {
-    int big_columns = columns / 2;
-    int field_size = columns * rows;
-    int *field;
-    int shmid;
+    int plot_i;
+    int plot_j;
+    int gardener_id;
+    int working_time;
+};
 
-    sem_t *semaphores[MAX_OF_SEMAPHORES];
+void handleGardenPlot(sem_t **semaphores, int *field, int big_columns, struct GardenerTask task)
+{
+    sem_wait(semaphores[task.plot_i / 2 * big_columns + task.plot_j / 2]);
+    printf("Gardener %d takes (row: %d, col: %d) plot\n", task.gardener_id, task.plot_i, task.plot_j);
+    fflush(stdout);
+    if (field[task.plot_i * columns + task.plot_j] == 0)
+    {
+        field[task.plot_i * columns + task.plot_j] = task.gardener_id;
+        usleep(task.working_time * 1000);
+    }
+    else
+    {
+        usleep(task.working_time / EMPTY_PLOT_COEFFICIENT * 1000);
+    }
+    sem_post(semaphores[task.plot_i / 2 * big_columns + task.plot_j / 2]);
+}
+
+void getSemaphores(sem_t **semaphores, int columns, int rows)
+{
     for (int k = 0; k < columns * rows / 4; ++k)
     {
         char sem_name[200];
@@ -39,42 +58,51 @@ void runFirstGardener(int columns, int rows, int workingTimeMilliseconds)
             exit(-1);
         };
     }
+}
 
-    if ((shmid = shm_open(shared_object, O_RDWR | O_NONBLOCK, 0666)) < 0)
+void getField(int **field, int field_size, int *shmid)
+{
+    if ((*shmid = shm_open(shared_object, O_RDWR | O_NONBLOCK, 0666)) < 0)
     {
         perror("Can't connect to shared memory");
         exit(-1);
     }
     else
     {
-        if ((field = mmap(0, field_size * sizeof(int), PROT_WRITE | PROT_READ, MAP_SHARED, shmid, 0)) < 0)
+        if ((*field = mmap(0, field_size * sizeof(int), PROT_WRITE | PROT_READ, MAP_SHARED, *shmid, 0)) < 0)
         {
             printf("Can\'t connect to shared memory\n");
             exit(-1);
         };
-        printf("First gardener open shared Memory\n");
-        fflush(stdout);
     }
+}
+
+void runFirstGardener(int columns, int rows, int workingTimeMilliseconds)
+{
+    int big_columns = columns / 2;
+    int field_size = columns * rows;
+    int *field;
+    int shmid;
+
+    sem_t *semaphores[MAX_OF_SEMAPHORES];
+    getSemaphores(semaphores, columns, rows);
+
+    getField(&field, field_size, &shmid);
+    printf("Gardener 1 open shared memory with field\n");
+    fflush(stdout);
 
     int i = 0;
     int j = 0;
+    struct GardenerTask task;
+    task.gardener_id = 1;
+    task.working_time = workingTimeMilliseconds;
     while (i < rows)
     {
         while (j < columns)
         {
-            sem_wait(semaphores[i / 2 * big_columns + j / 2]);
-            printf("First gardener takes (row: %d, col: %d) plot\n", i, j);
-            fflush(stdout);
-            if (field[i * columns + j] == 0)
-            {
-                field[i * columns + j] = 1;
-                usleep(workingTimeMilliseconds * 1000);
-            }
-            else
-            {
-                usleep(workingTimeMilliseconds / EMPTY_PLOT_COEFFICIENT * 1000);
-            }
-            sem_post(semaphores[i / 2 * big_columns + j / 2]);
+            task.plot_i = i;
+            task.plot_j = j;
+            handleGardenPlot(semaphores, field, big_columns, task);
             ++j;
         }
 
@@ -83,26 +111,16 @@ void runFirstGardener(int columns, int rows, int workingTimeMilliseconds)
 
         while (j >= 0)
         {
-            sem_wait(semaphores[i / 2 * big_columns + j / 2]);
-            printf("First gardener takes (row: %d, col: %d) plot\n", i, j);
-            fflush(stdout);
-            if (field[i * columns + j] == 0)
-            {
-                field[i * columns + j] = 1;
-                usleep(workingTimeMilliseconds * 1000);
-            }
-            else
-            {
-                usleep(workingTimeMilliseconds / EMPTY_PLOT_COEFFICIENT * 1000);
-            }
-            sem_post(semaphores[i / 2 * big_columns + j / 2]);
+            task.plot_i = i;
+            task.plot_j = j;
+            handleGardenPlot(semaphores, field, big_columns, task);
             --j;
         }
 
         ++i;
         ++j;
     }
-    printf("First gardener finish work\n");
+    printf("Gardener 1 finish work\n");
     exit(0);
 }
 
@@ -114,53 +132,25 @@ void runSecondGardener(int columns, int rows, int workingTimeMilliseconds)
     int shmid;
 
     sem_t *semaphores[MAX_OF_SEMAPHORES];
-    for (int k = 0; k < columns * rows / 4; ++k)
-    {
-        char sem_name[200];
-        sprintf(sem_name, "%s%d", sempahore_template_name, k);
+    getSemaphores(semaphores, columns, rows);
 
-        if ((semaphores[k] = sem_open(sem_name, 0)) == 0)
-        {
-            perror("sem_open: Can not open semaphore");
-            exit(-1);
-        };
-    }
-
-    if ((shmid = shm_open(shared_object, O_RDWR | O_NONBLOCK, 0666)) < 0)
-    {
-        perror("Can't connect to shared memory");
-        exit(-1);
-    }
-    else
-    {
-        if ((field = mmap(0, field_size * sizeof(int), PROT_WRITE | PROT_READ, MAP_SHARED, shmid, 0)) < 0)
-        {
-            printf("Can\'t connect to shared memory\n");
-            exit(-1);
-        };
-        printf("Second gardener open shared Memory\n");
-        fflush(stdout);
-    }
+    getField(&field, field_size, &shmid);
+    printf("Gardener 2 open shared memory with field\n");
+    fflush(stdout);
 
     int i = rows - 1;
     int j = columns - 1;
+
+    struct GardenerTask task;
+    task.gardener_id = 2;
+    task.working_time = workingTimeMilliseconds;
     while (j >= 0)
     {
         while (i >= 0)
         {
-            sem_wait(semaphores[i / 2 * big_columns + j / 2]);
-            printf("Second gardener takes (row: %d, col: %d) plot\n", i, j);
-            fflush(stdout);
-            if (field[i * columns + j] == 0)
-            {
-                field[i * columns + j] = 2;
-                usleep(workingTimeMilliseconds * 1000);
-            }
-            else
-            {
-                usleep(workingTimeMilliseconds / EMPTY_PLOT_COEFFICIENT * 1000);
-            }
-            sem_post(semaphores[i / 2 * big_columns + j / 2]);
+            task.plot_i = i;
+            task.plot_j = j;
+            handleGardenPlot(semaphores, field, big_columns, task);
             --i;
         }
 
@@ -169,26 +159,16 @@ void runSecondGardener(int columns, int rows, int workingTimeMilliseconds)
 
         while (i < rows)
         {
-            sem_wait(semaphores[i / 2 * big_columns + j / 2]);
-            printf("Second gardener takes (row: %d, col: %d) plot\n", i, j);
-            fflush(stdout);
-            if (field[i * columns + j] == 0)
-            {
-                field[i * columns + j] = 2;
-                usleep(workingTimeMilliseconds * 1000);
-            }
-            else
-            {
-                usleep(workingTimeMilliseconds / EMPTY_PLOT_COEFFICIENT * 1000);
-            }
-            sem_post(semaphores[i / 2 * big_columns + j / 2]);
+            task.plot_i = i;
+            task.plot_j = j;
+            handleGardenPlot(semaphores, field, big_columns, task);
             ++i;
         }
 
         --i;
         --j;
     }
-    printf("Second gardener finish work\n");
+    printf("Gardener 2 finish work\n");
     exit(0);
 }
 

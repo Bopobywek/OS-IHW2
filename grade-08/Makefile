@@ -13,4 +13,4 @@ special_semaphores_key:
 exit_key:
 	touch exit_key
 clean:
-	rm map_handler first_gardener
+	rm map_handler first_gardener second_gardener system_V_key2 special_semaphores_key exit_key

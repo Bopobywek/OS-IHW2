@@ -239,7 +239,7 @@ int main(int argc, char *argv[])
     fflush(stdout);
 
     shm_unlink(shared_object);
+    shm_unlink(exit_shared_object);
     printf("Unlink shared memory and semaphores\n");
-
     return 0;
 }

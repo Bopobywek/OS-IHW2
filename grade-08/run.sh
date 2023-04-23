@@ -6,6 +6,6 @@ then
     exit 1
 fi
 
-./first_gardener $1 &
-./second_gardener $2 &
-./map_handler $3
+./first_gardener $2 &
+./second_gardener $3 &
+./map_handler $1
